@@ -8,6 +8,7 @@ const catalog={
 };
 const languageCodes={'Hindi — हिन्दी':'hi-IN','English — India':'en-IN','Tamil — தமிழ்':'ta-IN','Telugu — తెలుగు':'te-IN','Marathi — मराठी':'mr-IN','Bengali — বাংলা':'bn-IN','Kannada — ಕನ್ನಡ':'kn-IN','Malayalam — മലയാളം':'ml-IN','Gujarati — ગુજરાતી':'gu-IN'};
 const select=document.getElementById('service-select'),table=document.getElementById('variation-table');
+document.getElementById('format')?.closest('label')?.remove();
 let configured={},enabled=['sarvam'],generated={},selectedKey=null;
 select.innerHTML='<option value="sarvam">Sarvam AI · checking production configuration…</option>';
 
@@ -16,7 +17,7 @@ function buildNarration(){
  const title=document.getElementById('content-title').value.trim();
  const body=document.getElementById('script').value.trim();
  const languageLabel=document.getElementById('language').value;
- const format=document.getElementById('format').value;
+ const format='Summary';
  const direction=document.getElementById('prompt').value.trim();
  if(!author||!title||!body)return null;
  const opening=`Hello! Let us hear the summary of the story "${title}" written by ${author}.`;

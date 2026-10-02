@@ -41,15 +41,15 @@ Deno.serve(async (request) => {
   }
 
   const author=String(input.author||'').trim(),title=String(input.title||'').trim(),body=String(input.body||'').trim();
-  const requestedFormat=String(input.format||'Summary').trim(),language=String(input.language_code||''),model=String(input.model||'bulbul:v3');
+  const language=String(input.language_code||''),model=String(input.model||'bulbul:v3');
   const speaker=String(input.speaker||'shubh');
   if(!author||!title||!body) return json({error:'Author, title, and story content are required'},400,origin);
   if(!languages.has(language)) return json({error:'Unsupported language'},400,origin);
   if(!(model in speakersByModel)) return json({error:'Unsupported Sarvam model'},400,origin);
   if(!speakersByModel[model as keyof typeof speakersByModel].has(speaker)) return json({error:`Unsupported voice for ${model}`},400,origin);
 
-  const format=['Summary','Poem','Skit'].includes(requestedFormat)?requestedFormat:'Summary';
-  const sourceText=`Hello! Let us hear the ${format.toLowerCase()} of the story "${title}" written by ${author}. ${body} Hope you liked the audio rendering of the ${title} written by ${author}, produced by Vision Empower Trust.`;
+  const format='Summary';
+  const sourceText=`Hello! Let us hear the summary of the story "${title}" written by ${author}. ${body} Hope you liked the audio rendering of the ${title} written by ${author}, produced by Vision Empower Trust.`;
   if(sourceText.length>2000) return json({error:'The complete narration must be 2,000 characters or fewer for translation'},400,origin);
 
   const {data:quota,error:quotaError}=await admin.rpc('consume_audio_generation_quota');

@@ -10,6 +10,10 @@
   height: 40px;
 }
 
+.two-col {
+  grid-template-columns: 1fr;
+}
+
 @media (max-width: 680px) {
   .sample {
     grid-template-columns: 1fr;
