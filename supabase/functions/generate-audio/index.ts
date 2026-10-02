@@ -58,14 +58,27 @@ Deno.serve(async (request) => {
   const {data:apiKey,error:keyError}=await admin.rpc('get_ai_service_key',{p_provider:'sarvam'});
   if(keyError||!apiKey) return json({error:'Sarvam is not configured in Supabase Vault'},503,origin);
 
-  const translation=await fetch('https://api.sarvam.ai/translate',{
+  const detection=await fetch('https://api.sarvam.ai/text-lid',{
     method:'POST',headers:{'api-subscription-key':apiKey,'Content-Type':'application/json'},
-    body:JSON.stringify({input:sourceText,source_language_code:'auto',target_language_code:language,model:'sarvam-translate:v1'})
+    body:JSON.stringify({input:sourceText.slice(0,1000)})
   });
-  const translationResult=await translation.json().catch(()=>null);
-  if(!translation.ok) return json({error:translationResult?.error?.message||translationResult?.message||`Sarvam translation failed (${translation.status})`},translation.status===429?429:502,origin);
-  const translatedText=translationResult?.translated_text;
-  if(!translatedText) return json({error:'Sarvam returned no translated narration'},502,origin);
+  const detectionResult=await detection.json().catch(()=>null);
+  if(!detection.ok) return json({error:detectionResult?.error?.message||detectionResult?.message||`Sarvam language detection failed (${detection.status})`},detection.status===429?429:502,origin);
+  const sourceLanguage=detectionResult?.language_code;
+  if(!sourceLanguage||!languages.has(sourceLanguage)) return json({error:'Sarvam could not identify the story language'},422,origin);
+
+  let translatedText=sourceText,translationRequestId:string|null=null;
+  if(sourceLanguage!==language){
+    const translation=await fetch('https://api.sarvam.ai/translate',{
+      method:'POST',headers:{'api-subscription-key':apiKey,'Content-Type':'application/json'},
+      body:JSON.stringify({input:sourceText,source_language_code:sourceLanguage,target_language_code:language,model:'sarvam-translate:v1'})
+    });
+    const translationResult=await translation.json().catch(()=>null);
+    if(!translation.ok) return json({error:translationResult?.error?.message||translationResult?.message||`Sarvam translation failed (${translation.status})`},translation.status===429?429:502,origin);
+    translatedText=translationResult?.translated_text;
+    translationRequestId=translationResult?.request_id||null;
+    if(!translatedText) return json({error:'Sarvam returned no translated narration'},502,origin);
+  }
   const textLimit=2500;
   if(translatedText.length>textLimit) return json({error:`The translated narration exceeds the ${textLimit.toLocaleString()} character limit for ${model}`},400,origin);
 
@@ -77,5 +90,5 @@ Deno.serve(async (request) => {
   if(!sarvam.ok) return json({error:result?.error?.message||result?.message||`Sarvam request failed (${sarvam.status})`},sarvam.status===429?429:502,origin);
   const audio=result?.audios?.[0];
   if(!audio) return json({error:'Sarvam returned no audio'},502,origin);
-  return json({audio,mimeType:'audio/mpeg',requestId:result.request_id||null,translationRequestId:translationResult.request_id||null,translatedText,model,speaker,language},200,origin);
+  return json({audio,mimeType:'audio/mpeg',requestId:result.request_id||null,translationRequestId,languageDetectionRequestId:detectionResult.request_id||null,sourceLanguage,translatedText,model,speaker,language},200,origin);
 });
