@@ -1,1 +1,23 @@
-const providers=[{id:'sarvam',name:'Sarvam AI',desc:'Indian languages and accents',logo:'स',placeholder:'sv_live_••••••••'},{id:'azure',name:'Azure AI Speech',desc:'Microsoft neural voices',logo:'Az',placeholder:'Azure speech key'},{id:'google',name:'Google Cloud TTS',desc:'Google Neural2 and WaveNet',logo:'G',placeholder:'Google Cloud API key'},{id:'aws',name:'Amazon Polly',desc:'AWS neural text-to-speech',logo:'A',placeholder:'AWS access token'},{id:'elevenlabs',name:'ElevenLabs',desc:'Expressive multilingual voices',logo:'XI',placeholder:'ElevenLabs API key'},{id:'openai',name:'OpenAI Audio',desc:'Natural text-to-speech models',logo:'AI',placeholder:'sk-••••••••'}];const grid=document.getElementById('provider-grid');const saved=JSON.parse(sessionStorage.getItem('vaani-services')||'{}');function render(){grid.innerHTML=providers.map(p=>`<article class="provider-card"><div class="provider-name"><span class="provider-logo">${p.logo}</span><span><strong>${p.name}</strong><small>${p.desc}</small></span></div><div class="key-field"><input type="password" id="key-${p.id}" placeholder="${p.placeholder}" value="${saved[p.id]||''}" aria-label="${p.name} API key"><button type="button" data-eye="${p.id}" aria-label="Show or hide ${p.name} key">◉</button></div><button class="connect ${saved[p.id]?'saved':''}" data-save="${p.id}">${saved[p.id]?'✓ Configured':'Configure'}</button></article>`).join('');updateCount()}function updateCount(){const n=Object.keys(saved).filter(k=>saved[k]).length;document.getElementById('configured-count').textContent=`${n} service${n===1?'':'s'} configured`}grid.addEventListener('click',e=>{const eye=e.target.closest('[data-eye]');if(eye){const input=document.getElementById('key-'+eye.dataset.eye);input.type=input.type==='password'?'text':'password';return}const btn=e.target.closest('[data-save]');if(!btn)return;const id=btn.dataset.save,input=document.getElementById('key-'+id);if(!input.value.trim()){delete saved[id];sessionStorage.setItem('vaani-services',JSON.stringify(saved));render();toast('Service removed');return}saved[id]=input.value.trim();sessionStorage.setItem('vaani-services',JSON.stringify(saved));render();toast(providers.find(p=>p.id===id).name+' configured for this session')});render();
+const providers=[
+ {id:'sarvam',name:'Sarvam AI',desc:'Indian languages and accents',logo:'स'},
+ {id:'azure',name:'Azure AI Speech',desc:'Microsoft neural voices',logo:'Az'},
+ {id:'google',name:'Google Cloud TTS',desc:'Google Neural2 and WaveNet',logo:'G'},
+ {id:'aws',name:'Amazon Polly',desc:'AWS neural text-to-speech',logo:'A'},
+ {id:'elevenlabs',name:'ElevenLabs',desc:'Expressive multilingual voices',logo:'XI'},
+ {id:'openai',name:'OpenAI Audio',desc:'Natural text-to-speech models',logo:'AI'}
+];
+const grid=document.getElementById('provider-grid'),count=document.getElementById('configured-count');
+let configured=new Set();
+function render(){
+ grid.innerHTML=providers.map(provider=>{const ready=configured.has(provider.id);return `<article class="provider-card"><div class="provider-name"><span class="provider-logo">${provider.logo}</span><span><strong>${provider.name}</strong><small>${provider.desc}</small></span></div><div class="key-field"><strong>${ready?'Production credential available':'Not configured'}</strong><small>${ready?'Encrypted in Supabase Vault':'Add this provider through the secure SQL setup'}</small></div><span class="connect ${ready?'saved':''}">${ready?'✓ Ready':'Unavailable'}</span></article>`}).join('');
+ count.textContent=`${configured.size} production service${configured.size===1?'':'s'} configured`;
+}
+async function loadConfigured(){
+ const config=window.VAANI_SUPABASE;
+ try{
+  const response=await fetch(`${config.url}/rest/v1/rpc/list_configured_ai_services`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`,'Content-Type':'application/json'},body:'{}'});
+  if(!response.ok)throw new Error('Secure service registry is not ready');
+  const rows=await response.json();configured=new Set(rows.map(row=>row.provider));render();
+ }catch(error){render();count.textContent='Supabase Vault setup is pending';toast(error.message)}
+}
+render();loadConfigured();
