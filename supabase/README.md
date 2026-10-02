@@ -1,4 +1,4 @@
-# Vaani Studio production audio backend
+# VE-Vani Studio production audio backend
 
 The public site never receives provider API keys. Supabase Vault stores the
 Sarvam key, and the `generate-audio` Edge Function reads it server-side.

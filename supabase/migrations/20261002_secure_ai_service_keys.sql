@@ -1,4 +1,4 @@
--- Vaani Studio: encrypted AI service credentials in Supabase Vault.
+-- VE-Vani Studio: encrypted AI service credentials in Supabase Vault.
 -- Run this migration once in the Supabase SQL Editor as the postgres role.
 
 create extension if not exists supabase_vault with schema vault;
@@ -66,7 +66,7 @@ begin
     select vault.create_secret(
       p_api_key,
       'vaani_' || p_provider || '_api_key',
-      'Vaani Studio API key for ' || p_provider
+      'VE-Vani Studio API key for ' || p_provider
     ) into new_secret_id;
 
     insert into public.ai_service_config (provider, secret_id, enabled, updated_at)
@@ -76,7 +76,7 @@ begin
       existing_secret_id,
       p_api_key,
       'vaani_' || p_provider || '_api_key',
-      'Vaani Studio API key for ' || p_provider
+      'VE-Vani Studio API key for ' || p_provider
     );
 
     update public.ai_service_config
