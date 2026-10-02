@@ -9,7 +9,7 @@ const catalog={
 const languageCodes={'Hindi — हिन्दी':'hi-IN','English — India':'en-IN','Tamil — தமிழ்':'ta-IN','Telugu — తెలుగు':'te-IN','Marathi — मराठी':'mr-IN','Bengali — বাংলা':'bn-IN','Kannada — ಕನ್ನಡ':'kn-IN','Malayalam — മലയാളം':'ml-IN','Gujarati — ગુજરાતી':'gu-IN'};
 const select=document.getElementById('service-select'),table=document.getElementById('variation-table');
 document.getElementById('format')?.closest('label')?.remove();
-let configured={},enabled=['sarvam'],generated={},selectedKey=null;
+let configured={},enabled=['sarvam'],generated={},selectedKey=null,trialNumber=0,voiceSelections={};
 select.innerHTML='<option value="sarvam">Sarvam AI · checking production configuration…</option>';
 
 function buildNarration(){
@@ -26,14 +26,16 @@ function buildNarration(){
  return {author,title,body,languageLabel,language:languageCodes[languageLabel]||'en-IN',format,direction,instructions,text:[opening,body,closing].join(' ')};
 }
 
-function heights(seed){return Array.from({length:32},(_,index)=>12+((index*13+seed*7)%27))}
 function render(){
  const provider=catalog[select.value];
+ const finalized=Object.values(generated).some(sample=>sample.savedId);
  document.getElementById('service-hint').textContent=configured[select.value]?'Production credential is available securely through Supabase Vault.':'This service is not configured for production.';
- table.innerHTML=provider.models.map((model,index)=>{
-  const key=select.value+'-'+index,generatedSample=generated[key],voice=generatedSample?.voice||model[1][0];
-  return `<article class="variation-row ${generatedSample?'generated':''}" data-key="${key}"><span class="model-logo">${provider.logo}</span><span class="model"><strong>${model[0]}</strong><small>${provider.name}</small></span><select class="voice-select" aria-label="Voice for ${model[0]}">${model[1].map(item=>`<option ${item===voice?'selected':''}>${item}</option>`).join('')}</select><button class="generate-one">${generatedSample?'Regenerate':'Generate sample'}</button>${generatedSample?`<div class="sample"><audio class="sample-player" controls preload="metadata" src="${generatedSample.audioUrl}" aria-label="${model[0]} ${voice} generated audio"></audio><small>${generatedSample.languageLabel} · ${generatedSample.format} · ${generatedSample.savedId?'saved in Supabase':'production MP3'}</small><label class="select-rendition"><input type="checkbox" ${selectedKey===key?'checked':''}> ${generatedSample.savedId?'Selected and saved':'Select rendition'}</label></div>`:''}</article>`;
+ const generators=provider.models.map((model,index)=>{
+  const key=`model-${select.value}-${index}`,voice=voiceSelections[key]||model[1][0];
+  return `<article class="variation-row generator-row" data-model-index="${index}" data-key="${key}"><span class="model-logo">${provider.logo}</span><span class="model"><strong>${model[0]}</strong><small>${provider.name}</small></span><select class="voice-select" aria-label="Voice for ${model[0]}" ${finalized?'disabled':''}>${model[1].map(item=>`<option ${item===voice?'selected':''}>${item}</option>`).join('')}</select><button class="generate-one" ${finalized?'disabled':''}>${finalized?'Final selection saved':'Generate sample'}</button></article>`;
  }).join('');
+ const trials=Object.entries(generated).map(([key,sample])=>`<article class="variation-row generated trial-row" data-key="${key}"><span class="model-logo">${sample.trialNumber}</span><span class="model"><strong>${sample.model}</strong><small>Trial ${sample.trialNumber} · ${sample.voice}</small></span><span class="trial-language">${sample.languageLabel}</span><span class="trial-status">${sample.savedId?'Saved':'Ready to compare'}</span><div class="sample"><audio class="sample-player" controls preload="metadata" src="${sample.audioUrl}" aria-label="Trial ${sample.trialNumber}, ${sample.model}, ${sample.voice}"></audio><small>${sample.languageLabel} · ${sample.format} · ${sample.savedId?'saved in Supabase':'production MP3'}</small><label class="select-rendition"><input type="checkbox" ${selectedKey===key?'checked':''} ${finalized&&selectedKey!==key?'disabled':''}> ${sample.savedId?'Final selection saved':'Select as final'}</label></div></article>`).join('');
+ table.innerHTML=generators+(trials?`<h3 class="trial-heading">Generated variations</h3>${trials}`:'');
  const count=Object.keys(generated).length;
  document.getElementById('ready-count').textContent=`${count} sample${count===1?'':'s'} ready`;
  updateSelection();
@@ -54,7 +56,7 @@ function audioUrlFromBase64(base64,mimeType){
 }
 select.addEventListener('change',render);
 table.addEventListener('change',async event=>{
- if(event.target.matches('.voice-select')){const row=event.target.closest('.variation-row'),sample=generated[row.dataset.key];if(sample){sample.voice=event.target.value;if(selectedKey===row.dataset.key)updateSelection()}}
+ if(event.target.matches('.voice-select')){voiceSelections[event.target.closest('.variation-row').dataset.key]=event.target.value}
  if(event.target.matches('.select-rendition input')){
   const key=event.target.closest('.variation-row').dataset.key;
   selectedKey=event.target.checked?key:null;render();
@@ -72,7 +74,7 @@ async function saveSelectedRendition(key){
  }catch(error){selectedKey=null;render();toast(error.message||'Could not save the selected rendition')}
 }
 async function generateSample(row,button){
- const provider=catalog[select.value],index=Number(row.dataset.key.split('-').pop()),voice=row.querySelector('.voice-select').value,narration=buildNarration();
+ const provider=catalog[select.value],index=Number(row.dataset.modelIndex),voice=row.querySelector('.voice-select').value,narration=buildNarration();
  if(!narration){toast('Add the author, title, and script before generating');return}
  if(!configured.sarvam){toast('Sarvam is not configured in Supabase Vault');return}
  button.disabled=true;button.textContent='Generating production audio…';
@@ -82,9 +84,8 @@ async function generateSample(row,button){
   const response=await fetch(`${config.url}/functions/v1/generate-audio`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`,'Content-Type':'application/json'},body:JSON.stringify({author:narration.author,title:narration.title,body:narration.body,format:narration.format,direction:narration.direction,language_code:narration.language,speaker:voice,model,pace:.92,temperature:.6})});
   const result=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(result.error||'Sarvam audio generation failed');
-  const previous=generated[row.dataset.key];
-  if(previous?.audioUrl)URL.revokeObjectURL(previous.audioUrl);
-  generated[row.dataset.key]={provider:provider.name,model:provider.models[index][0],voice,duration:'production MP3',audioUrl:audioUrlFromBase64(result.audio,result.mimeType),audioBase64:result.audio,mimeType:result.mimeType,translatedText:result.translatedText,requestId:result.requestId,...narration};
+  const key=`trial-${Date.now()}-${++trialNumber}`;
+  generated[key]={trialNumber,provider:provider.name,model:provider.models[index][0],voice,duration:'production MP3',audioUrl:audioUrlFromBase64(result.audio,result.mimeType),audioBase64:result.audio,mimeType:result.mimeType,translatedText:result.translatedText,requestId:result.requestId,...narration};
   render();toast(`${narration.languageLabel} ${narration.format.toLowerCase()} generated by Sarvam`);
  }catch(error){button.disabled=false;button.textContent='Generate sample';const message=error instanceof TypeError?'Production audio backend is not deployed in Supabase yet.':error.message;toast(message)}
 }

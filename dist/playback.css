@@ -14,6 +14,29 @@
   grid-template-columns: 1fr;
 }
 
+.trial-heading {
+  margin: 12px 2px 0;
+  color: var(--deep);
+  font-family: Georgia, serif;
+  font-size: 1.25rem;
+}
+
+.trial-language,
+.trial-status {
+  color: var(--muted);
+  font-size: .74rem;
+  font-weight: 700;
+}
+
+.trial-row .model-logo {
+  background: var(--orange);
+}
+
+.generator-row .generate-one:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
 @media (max-width: 680px) {
   .sample {
     grid-template-columns: 1fr;
