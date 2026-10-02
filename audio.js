@@ -12,7 +12,21 @@ let configured=JSON.parse(sessionStorage.getItem('vaani-services')||'{}');
 let enabled=Object.keys(configured).filter(key=>catalog[key]);
 if(!enabled.length)enabled=['sarvam','azure','google','elevenlabs','openai'];
 select.innerHTML=enabled.map(id=>`<option value="${id}">${catalog[id].name}${configured[id]?' · configured':' · preview'}</option>`).join('');
-let generated={},selectedKey=null,speakingKey=null,fallbackAudio=null;
+let generated={},selectedKey=null,speakingKey=null;
+
+function buildNarration(){
+ const author=document.getElementById('author-name').value.trim();
+ const title=document.getElementById('content-title').value.trim();
+ const body=document.getElementById('script').value.trim();
+ const languageLabel=document.getElementById('language').value;
+ const format=document.getElementById('format').value;
+ const direction=document.getElementById('prompt').value.trim();
+ if(!author||!title||!body)return null;
+ const opening=`Hello! Let us hear the summary of the story "${title}" written by ${author}.`;
+ const instructions=[`Language: ${languageLabel}`,`Format: ${format}`,direction?`Additional direction: ${direction}`:''].filter(Boolean).join('. ');
+ const closing=`Hope you liked the audio rendering of the ${title} written by ${author}, produced by Vision Empower Trust.`;
+ return {author,title,body,languageLabel,language:languageCodes[languageLabel]||'en-IN',format,direction,instructions,text:[opening,body,closing].join(' ')};
+}
 
 function heights(seed){return Array.from({length:32},(_,index)=>12+((index*13+seed*7)%27))}
 function render(){
@@ -20,7 +34,7 @@ function render(){
  document.getElementById('service-hint').textContent=configured[select.value]?'Ready with the key configured in this session.':'Preview mode — browser speech is available for listening; configure an API key for provider-quality output.';
  table.innerHTML=provider.models.map((model,index)=>{
   const key=select.value+'-'+index,generatedSample=generated[key],voice=generatedSample?.voice||model[1][0],isSpeaking=speakingKey===key;
-  return `<article class="variation-row ${generatedSample?'generated':''}" data-key="${key}"><span class="model-logo">${provider.logo}</span><span class="model"><strong>${model[0]}</strong><small>${provider.name}</small></span><select class="voice-select" aria-label="Voice for ${model[0]}">${model[1].map(item=>`<option ${item===voice?'selected':''}>${item}</option>`).join('')}</select><button class="generate-one">${generatedSample?'Regenerate':'Generate sample'}</button>${generatedSample?`<div class="sample"><button class="play" aria-label="${isSpeaking?'Stop':'Play'} sample">${isSpeaking?'■':'▶'}</button><div class="wave" aria-hidden="true">${heights(index+select.value.length).map(height=>`<i style="height:${height}px"></i>`).join('')}</div><small>${isSpeaking?'Playing browser preview':'Ready to play'} · ${generatedSample.duration}</small><label class="select-rendition"><input type="checkbox" ${selectedKey===key?'checked':''}> Select rendition</label></div>`:''}</article>`;
+  return `<article class="variation-row ${generatedSample?'generated':''}" data-key="${key}"><span class="model-logo">${provider.logo}</span><span class="model"><strong>${model[0]}</strong><small>${provider.name}</small></span><select class="voice-select" aria-label="Voice for ${model[0]}">${model[1].map(item=>`<option ${item===voice?'selected':''}>${item}</option>`).join('')}</select><button class="generate-one">${generatedSample?'Regenerate':'Generate sample'}</button>${generatedSample?`<div class="sample"><button class="play" aria-label="${isSpeaking?'Stop':'Play'} sample">${isSpeaking?'■':'▶'}</button><div class="wave" aria-hidden="true">${heights(index+select.value.length).map(height=>`<i style="height:${height}px"></i>`).join('')}</div><small>${isSpeaking?'Playing generated narration':`${generatedSample.languageLabel} · ${generatedSample.format}`} · ${generatedSample.duration}</small><label class="select-rendition"><input type="checkbox" ${selectedKey===key?'checked':''}> Select rendition</label></div>`:''}</article>`;
  }).join('');
  const count=Object.keys(generated).length;
  document.getElementById('ready-count').textContent=`${count} sample${count===1?'':'s'} ready`;
@@ -31,22 +45,17 @@ function updateSelection(){
  if(!selectedKey||!generated[selectedKey]){title.textContent='No rendition selected';copy.textContent='Generate samples, listen, then select one rendition to download.';button.disabled=true;return}
  const sample=generated[selectedKey];title.textContent=`${sample.model} · ${sample.voice} selected`;copy.textContent=`${sample.provider} · ready as high-quality MP3`;button.disabled=false;
 }
-function stopSpeech(){if('speechSynthesis'in window)window.speechSynthesis.cancel();if(fallbackAudio){fallbackAudio.pause();fallbackAudio.currentTime=0}speakingKey=null;render()}
+function stopSpeech(){if('speechSynthesis'in window)window.speechSynthesis.cancel();speakingKey=null;render()}
 function playSpeech(key){
  if(speakingKey===key){stopSpeech();toast('Playback stopped');return}
  if(!('speechSynthesis'in window)){
-  if(fallbackAudio){fallbackAudio.pause();fallbackAudio.currentTime=0}
-  fallbackAudio=new Audio('assets/browser-voice-preview.ogg');
-  fallbackAudio.onended=()=>{speakingKey=null;render()};
-  fallbackAudio.onerror=()=>{speakingKey=null;render();toast('The audio preview could not be loaded')};
-  speakingKey=key;render();
-  fallbackAudio.play().then(()=>toast('Playing an audible sample preview')).catch(()=>{speakingKey=null;render();toast('Press Play again to allow audio')});
+  toast('This browser cannot generate dynamic speech. Open the page in Chrome or Edge, or connect a provider API.');
   return;
  }
  window.speechSynthesis.cancel();
- const text=document.getElementById('script').value.trim();
- if(!text){toast('Add script text before playing a sample');return}
- const utterance=new SpeechSynthesisUtterance(text),language=languageCodes[document.getElementById('language').value]||'en-IN';
+ const sample=generated[key];
+ if(!sample?.text){toast('Regenerate this sample with complete content details');return}
+ const utterance=new SpeechSynthesisUtterance(sample.text),language=sample.language;
  utterance.lang=language;utterance.rate=.92;utterance.pitch=1;
  const matchingVoices=window.speechSynthesis.getVoices().filter(voice=>voice.lang.toLowerCase().startsWith(language.split('-')[0].toLowerCase()));
  const modelIndex=Number(key.split('-').pop())||0;
@@ -61,9 +70,9 @@ table.addEventListener('change',event=>{
 });
 table.addEventListener('click',event=>{
  const row=event.target.closest('.variation-row');if(!row)return;
- if(event.target.closest('.generate-one')){const provider=catalog[select.value],index=Number(row.dataset.key.split('-').pop()),voice=row.querySelector('.voice-select').value,button=event.target.closest('.generate-one');button.disabled=true;button.textContent='Generating…';setTimeout(()=>{generated[row.dataset.key]={provider:provider.name,model:provider.models[index][0],voice,duration:'0:'+(18+index*4)};render();toast('Sample ready — press Play to hear it')},900)}
+ if(event.target.closest('.generate-one')){const provider=catalog[select.value],index=Number(row.dataset.key.split('-').pop()),voice=row.querySelector('.voice-select').value,button=event.target.closest('.generate-one'),narration=buildNarration();if(!narration){toast('Add the author, title, and script before generating');return}button.disabled=true;button.textContent='Generating…';setTimeout(()=>{generated[row.dataset.key]={provider:provider.name,model:provider.models[index][0],voice,duration:'0:'+(18+index*4),...narration};render();toast(`${narration.languageLabel} ${narration.format.toLowerCase()} regenerated — press Play to hear it`)},900)}
  else if(event.target.closest('.play'))playSpeech(row.dataset.key);
 });
 document.getElementById('download-selected').addEventListener('click',()=>toast('Connect the selected provider API to download a real MP3'));
-window.addEventListener('pagehide',()=>{if('speechSynthesis'in window)window.speechSynthesis.cancel();if(fallbackAudio)fallbackAudio.pause()});
+window.addEventListener('pagehide',()=>{if('speechSynthesis'in window)window.speechSynthesis.cancel()});
 render();
