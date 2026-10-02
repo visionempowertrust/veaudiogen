@@ -37,7 +37,7 @@ Deno.serve(async (request) => {
     const file=form.get('file'),language=String(form.get('language_code')||'');
     if(!(file instanceof File)||!file.size) return json({error:'Choose an audio or video file'},400,origin);
     if(file.size>20_000_000) return json({error:'The upload must be 20 MB or smaller'},413,origin);
-    if(!languages.has(language)) return json({error:'Unsupported source language'},400,origin);
+    if(language!=='unknown'&&!languages.has(language)) return json({error:'Unsupported source language'},400,origin);
     const {data:quota,error:quotaError}=await admin.rpc('consume_audio_generation_quota');
     if(quotaError) return json({error:'Usage protection is not configured'},503,origin);
     if(!quota) return json({error:'Processing limit reached. Please try again later.'},429,origin);
@@ -64,7 +64,7 @@ Deno.serve(async (request) => {
 
   if(input.action==='process-media-status') {
     const jobId=String(input.job_id||''),language=String(input.language_code||'');
-    if(!/^[a-zA-Z0-9_-]{8,200}$/.test(jobId)||!languages.has(language))return json({error:'Invalid processing job'},400,origin);
+    if(!/^[a-zA-Z0-9_-]{8,200}$/.test(jobId)||(language!=='unknown'&&!languages.has(language)))return json({error:'Invalid processing job'},400,origin);
     const {data:apiKey,error:keyError}=await admin.rpc('get_ai_service_key',{p_provider:'sarvam'});
     if(keyError||!apiKey) return json({error:'Sarvam is not configured in Supabase Vault'},503,origin);
     const headers={'api-subscription-key':apiKey,'Content-Type':'application/json'};
@@ -78,13 +78,15 @@ Deno.serve(async (request) => {
     if(!downloadResponse.ok||!downloadUrl)return json({error:downloads?.error?.message||downloads?.message||'Could not retrieve the transcript'},502,origin);
     const transcriptResponse=await fetch(downloadUrl),transcriptResult=await transcriptResponse.json().catch(()=>null),transcript=transcriptResult?.transcript||transcriptResult?.data?.transcript;
     if(!transcript)return json({error:'The completed batch result contained no transcript'},502,origin);
+    const detectedLanguage=transcriptResult?.language_code||transcriptResult?.data?.language_code||language;
+    if(detectedLanguage==='unknown'||!languages.has(detectedLanguage))return json({error:'Sarvam could not identify the spoken language. Please select the source language and try again.'},422,origin);
     let englishTranslation=transcript;
-    if(language!=='en-IN'){
+    if(detectedLanguage!=='en-IN'){
       const translated:string[]=[];
-      for(const chunk of textChunks(transcript)){const response=await fetch('https://api.sarvam.ai/translate',{method:'POST',headers,body:JSON.stringify({input:chunk,source_language_code:language,target_language_code:'en-IN',model:'sarvam-translate:v1'})}),result=await response.json().catch(()=>null);if(!response.ok||!result?.translated_text)return json({error:result?.error?.message||result?.message||'English translation failed'},502,origin);translated.push(result.translated_text)}
+      for(const chunk of textChunks(transcript)){const response=await fetch('https://api.sarvam.ai/translate',{method:'POST',headers,body:JSON.stringify({input:chunk,source_language_code:detectedLanguage,target_language_code:'en-IN',model:'sarvam-translate:v1'})}),result=await response.json().catch(()=>null);if(!response.ok||!result?.translated_text)return json({error:result?.error?.message||result?.message||'English translation failed'},502,origin);translated.push(result.translated_text)}
       englishTranslation=translated.join(' ');
     }
-    return json({pending:false,state:'Completed',transcript,englishTranslation,sourceLanguage:language},200,origin);
+    return json({pending:false,state:'Completed',transcript,englishTranslation,sourceLanguage:detectedLanguage},200,origin);
   }
 
   if(input.action==='process-english-tts') {

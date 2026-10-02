@@ -62,7 +62,7 @@ processButton.addEventListener('click',async()=>{
   if(!response.ok)throw new Error(started.error||'Media processing failed');const result=started.batch?await waitForBatch(started.jobId,languageCode):started;
   sourceTranscript.value=result.transcript||'';englishTranslation.value=result.englishTranslation||'';estimatedGender=await genderPromise||'male';
   genderResult.textContent=`Estimated original speaker: ${estimatedGender}. English voice: ${estimatedGender==='female'?'Priya':'Ratan'}.`;
-  results.hidden=false;statusText.textContent='Transcript and English translation ready';toast('Media processing complete');
+  results.hidden=false;statusText.textContent=`Transcript and English translation ready${result.sourceLanguage?` · Detected ${result.sourceLanguage}`:''}`;toast('Media processing complete');
  }catch(error){statusText.textContent='Processing failed';toast(error.message||'Media processing failed')}finally{processButton.disabled=false}
 });
 

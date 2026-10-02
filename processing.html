@@ -16,7 +16,7 @@
     <section class="processing-card">
       <div class="upload-grid">
         <label class="upload-box" for="media-file"><strong>Choose audio or video</strong><span id="file-copy">MP3, WAV, AAC, MP4, M4A, WebM and other supported formats · maximum 20 MB. Video audio is extracted locally, then longer recordings use Sarvam batch processing.</span><input id="media-file" type="file" accept="audio/*,video/mp4,video/webm,.m4a,.wma,.amr,.aiff,.flac,.ogg,.opus" required></label>
-        <label>Source language<select id="source-language"><option value="hi-IN">Hindi — हिन्दी</option><option value="en-IN">English — India</option><option value="ta-IN">Tamil — தமிழ்</option><option value="te-IN">Telugu — తెలుగు</option><option value="mr-IN">Marathi — मराठी</option><option value="bn-IN">Bengali — বাংলা</option><option value="kn-IN">Kannada — ಕನ್ನಡ</option><option value="ml-IN">Malayalam — മലയാളം</option><option value="gu-IN">Gujarati — ગુજરાતી</option></select></label>
+        <label>Source language<select id="source-language"><option value="unknown" selected>Auto-detect — Recommended</option><option value="hi-IN">Hindi — हिन्दी</option><option value="en-IN">English — India</option><option value="ta-IN">Tamil — தமிழ்</option><option value="te-IN">Telugu — తెలుగు</option><option value="mr-IN">Marathi — मराठी</option><option value="bn-IN">Bengali — বাংলা</option><option value="kn-IN">Kannada — ಕನ್ನಡ</option><option value="ml-IN">Malayalam — മലയാളം</option><option value="gu-IN">Gujarati — ગુજરાતી</option></select></label>
       </div>
       <div class="processing-actions"><button class="button primary" id="process-media">Process file</button><span id="processing-status" role="status">Ready for upload</span></div>
     </section>
@@ -28,6 +28,6 @@
     <p class="processing-note">Speaker gender is estimated locally from vocal pitch and can be imperfect for music, noisy recordings, children, or multiple speakers. Sarvam's standard speech-to-text response does not include gender metadata.</p>
   </main>
   <div class="toast" id="toast" role="status"></div>
-  <script src="shared.js"></script><script src="supabase-config.js"></script><script src="processing.js?v=4"></script>
+  <script src="shared.js"></script><script src="supabase-config.js"></script><script src="processing.js?v=5"></script>
 </body>
 </html>
