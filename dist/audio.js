@@ -1,5 +1,5 @@
 const catalog={
- sarvam:{name:'Sarvam AI',logo:'स',models:[['Bulbul v3',['shubh','aditya','ritu','priya','neha','rahul','pooja','rohan','simran','kavya','amit','dev','ishita','shreya','ratan','varun','manan','sumit','roopa','kabir','aayan','ashutosh','advait','anand','tanya','tarun','sunny','mani','gokul','vijay','shruti','suhani','mohit','kavitha','rehan','soham','rupali']],['Bulbul v2',['anushka','manisha','vidya','arya','abhilash','karun','hitesh']]]},
+ sarvam:{name:'Sarvam AI',logo:'स',models:[['Bulbul v3',['shubh','aditya','ritu','priya','neha','rahul','pooja','rohan','simran','kavya','amit','dev','ishita','shreya','ratan','varun','manan','sumit','roopa','kabir','aayan','ashutosh','advait','anand','tanya','tarun','sunny','mani','gokul','vijay','shruti','suhani','mohit','kavitha','rehan','soham','rupali']]]},
  azure:{name:'Azure AI Speech',logo:'Az',models:[['Neural HD',['Swara · hi-IN','Madhur · hi-IN','Neerja · en-IN','Prabhat · en-IN']],['Multilingual Neural',['Aarohi','Arjun','Kavya','Rehaan']]]},
  google:{name:'Google Cloud TTS',logo:'G',models:[['Chirp 3 HD',['Leda','Orus','Aoede','Charon']],['Neural2',['hi-IN-A','hi-IN-B','en-IN-C','en-IN-D']]]},
  aws:{name:'Amazon Polly',logo:'A',models:[['Neural',['Aditi','Kajal','Raveena','Rishi']],['Long-form',['Aditi','Kajal']]]},

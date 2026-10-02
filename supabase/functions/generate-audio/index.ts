@@ -3,8 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const allowedOrigins = new Set(['https://visionempowertrust.github.io','http://127.0.0.1:4173','http://localhost:4173']);
 const languages = new Set(['hi-IN','en-IN','ta-IN','te-IN','mr-IN','bn-IN','kn-IN','ml-IN','gu-IN']);
 const speakersByModel = {
-  'bulbul:v3': new Set(['shubh','aditya','ritu','priya','neha','rahul','pooja','rohan','simran','kavya','amit','dev','ishita','shreya','ratan','varun','manan','sumit','roopa','kabir','aayan','ashutosh','advait','anand','tanya','tarun','sunny','mani','gokul','vijay','shruti','suhani','mohit','kavitha','rehan','soham','rupali']),
-  'bulbul:v2': new Set(['anushka','manisha','vidya','arya','abhilash','karun','hitesh'])
+  'bulbul:v3': new Set(['shubh','aditya','ritu','priya','neha','rahul','pooja','rohan','simran','kavya','amit','dev','ishita','shreya','ratan','varun','manan','sumit','roopa','kabir','aayan','ashutosh','advait','anand','tanya','tarun','sunny','mani','gokul','vijay','shruti','suhani','mohit','kavitha','rehan','soham','rupali'])
 };
 
 function cors(origin: string | null) {
@@ -43,7 +42,7 @@ Deno.serve(async (request) => {
 
   const author=String(input.author||'').trim(),title=String(input.title||'').trim(),body=String(input.body||'').trim();
   const requestedFormat=String(input.format||'Summary').trim(),language=String(input.language_code||''),model=String(input.model||'bulbul:v3');
-  const speaker=String(input.speaker||(model==='bulbul:v2'?'anushka':'shubh'));
+  const speaker=String(input.speaker||'shubh');
   if(!author||!title||!body) return json({error:'Author, title, and story content are required'},400,origin);
   if(!languages.has(language)) return json({error:'Unsupported language'},400,origin);
   if(!(model in speakersByModel)) return json({error:'Unsupported Sarvam model'},400,origin);
@@ -67,12 +66,12 @@ Deno.serve(async (request) => {
   if(!translation.ok) return json({error:translationResult?.error?.message||translationResult?.message||`Sarvam translation failed (${translation.status})`},translation.status===429?429:502,origin);
   const translatedText=translationResult?.translated_text;
   if(!translatedText) return json({error:'Sarvam returned no translated narration'},502,origin);
-  const textLimit=model==='bulbul:v2'?1500:2500;
+  const textLimit=2500;
   if(translatedText.length>textLimit) return json({error:`The translated narration exceeds the ${textLimit.toLocaleString()} character limit for ${model}`},400,origin);
 
   const sarvam=await fetch('https://api.sarvam.ai/text-to-speech',{
     method:'POST',headers:{'api-subscription-key':apiKey,'Content-Type':'application/json'},
-    body:JSON.stringify({text:translatedText,language_code:language,speaker,model,pace:model==='bulbul:v2'?Math.min(3,Math.max(.3,Number(input.pace)||.92)):Math.min(2,Math.max(.5,Number(input.pace)||.92)),...(model==='bulbul:v3'?{temperature:Math.min(2,Math.max(.01,Number(input.temperature)||.6))}:{}),speech_sample_rate:24000,output_audio_codec:'mp3'})
+    body:JSON.stringify({text:translatedText,language_code:language,speaker,model,pace:Math.min(2,Math.max(.5,Number(input.pace)||.92)),temperature:Math.min(2,Math.max(.01,Number(input.temperature)||.6)),speech_sample_rate:24000,output_audio_codec:'mp3'})
   });
   const result=await sarvam.json().catch(()=>null);
   if(!sarvam.ok) return json({error:result?.error?.message||result?.message||`Sarvam request failed (${sarvam.status})`},sarvam.status===429?429:502,origin);
