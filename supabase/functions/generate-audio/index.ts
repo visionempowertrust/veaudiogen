@@ -39,8 +39,9 @@ Deno.serve(async (request) => {
     const {data:apiKey,error:keyError}=await admin.rpc('get_ai_service_key',{p_provider:'sarvam'});
     if(keyError||!apiKey) return json({error:'Sarvam is not configured in Supabase Vault'},503,origin);
     const requestSpeech=async(mode:'transcribe'|'translate')=>{
+      const sarvamFile=file.type==='video/mp4'?new File([file],file.name.replace(/\.mp4$/i,'.m4a'),{type:'audio/mp4'}):file;
       const speechForm=new FormData();
-      speechForm.append('file',file,file.name);speechForm.append('model','saaras:v3');speechForm.append('mode',mode);speechForm.append('language_code',language);
+      speechForm.append('file',sarvamFile,sarvamFile.name);speechForm.append('model','saaras:v3');speechForm.append('mode',mode);speechForm.append('language_code',language);
       const response=await fetch('https://api.sarvam.ai/speech-to-text',{method:'POST',headers:{'api-subscription-key':apiKey},body:speechForm});
       const result=await response.json().catch(()=>null);
       if(!response.ok) throw new Error(result?.error?.message||result?.message||`Sarvam ${mode} failed (${response.status})`);
