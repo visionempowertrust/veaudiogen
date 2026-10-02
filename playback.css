@@ -37,6 +37,12 @@
   opacity: .55;
 }
 
+#audio-dashboard-body audio {
+  display: block;
+  width: min(320px, 100%);
+  margin-bottom: 5px;
+}
+
 @media (max-width: 680px) {
   .sample {
     grid-template-columns: 1fr;

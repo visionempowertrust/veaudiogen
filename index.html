@@ -1,9 +1,33 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vaani Studio — Volunteer Audio Library</title><meta name="description" content="Create, compare and share accessible Indian-language audio for visually impaired students."><link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230c3b35'/%3E%3Cpath d='M8 17h3l2-5 4 10 3-7 2 2h2' fill='none' stroke='%23f6c85f' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E"><link rel="stylesheet" href="styles.css"></head><body>
-<header class="topbar"><a class="brand" href="index.html"><span class="brandmark">〽</span>Vaani Studio</a><nav aria-label="Main navigation"><a class="active" href="index.html">Dashboard</a><a href="audio.html">Generate audio</a><a href="settings.html">Settings</a></nav><span class="volunteer">Volunteer workspace <b>MS</b></span></header>
-<main class="shell"><section class="hero"><div><span class="eyebrow">Vision Empower Trust · Volunteer audio library</span><h1>Every book deserves<br><em>a human voice.</em></h1><p>Vaani Studio helps volunteers turn adapted learning content into clear, expressive audio for visually impaired students across India.</p><div class="hero-actions"><a class="button primary" href="audio.html">Create new audio</a><a class="button ghost" href="settings.html">Configure AI services</a></div></div><div class="hero-art" aria-label="Audio production summary"><div class="pulse"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><strong>27</strong><small>accessible recordings<br>shared this month</small></div></section>
-<section class="dashboard"><div class="section-head"><div><span class="eyebrow">Recent work</span><h2>Audio dashboard</h2></div><div class="filters"><button class="chip active">All languages</button><button class="chip">My recordings</button></div></div><div class="table-wrap"><table><thead><tr><th>Content title</th><th>Language</th><th>Format</th><th>Audio</th><th>Created by</th></tr></thead><tbody>
-<tr><td><strong>The Clever Rabbit</strong><small>Panchatantra Stories · Class 6</small></td><td><span class="lang">हि</span>Hindi</td><td><span class="format">Summary</span></td><td><a class="audio-link" href="#" data-demo-download>▶ Listen & download</a></td><td><span class="person orange">MS</span>Meera S.</td></tr>
-<tr><td><strong>Wings of Fire</strong><small>A.P.J. Abdul Kalam · Class 8</small></td><td><span class="lang blue">EN</span>English</td><td><span class="format poem">Poem</span></td><td><a class="audio-link" href="#" data-demo-download>▶ Listen & download</a></td><td><span class="person blue">RK</span>Rohan K.</td></tr>
-<tr><td><strong>The Thirsty Crow</strong><small>Folk Tales · Class 3</small></td><td><span class="lang purple">த</span>Tamil</td><td><span class="format skit">Skit</span></td><td><a class="audio-link" href="#" data-demo-download>▶ Listen & download</a></td><td><span class="person purple">AP</span>Ananya P.</td></tr>
-<tr><td><strong>Water: A Precious Resource</strong><small>Environmental Studies · Class 7</small></td><td><span class="lang green">ಮ</span>Kannada</td><td><span class="format">Summary</span></td><td><a class="audio-link" href="#" data-demo-download>▶ Listen & download</a></td><td><span class="person green">VN</span>Vikram N.</td></tr>
-</tbody></table></div></section><section class="next-step"><div><span class="eyebrow light">Ready for your next story?</span><h2>Turn a prepared script into accessible audio.</h2></div><a class="button sun" href="audio.html">Open audio studio</a></section></main><div class="toast" id="toast" role="status"></div><script src="shared.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Vaani Studio — Volunteer Audio Library</title>
+  <meta name="description" content="Create, compare and share accessible Indian-language audio for visually impaired students.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230c3b35'/%3E%3Cpath d='M8 17h3l2-5 4 10 3-7 2 2h2' fill='none' stroke='%23f6c85f' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html"><span class="brandmark">〽</span>Vaani Studio</a>
+    <nav aria-label="Main navigation"><a class="active" href="index.html">Dashboard</a><a href="audio.html">Generate audio</a><a href="settings.html">Settings</a></nav>
+    <span class="volunteer">Volunteer workspace <b>MS</b></span>
+  </header>
+  <main class="shell">
+    <section class="hero">
+      <div><span class="eyebrow">Vision Empower Trust · Volunteer audio library</span><h1>Every book deserves<br><em>a human voice.</em></h1><p>Vaani Studio helps volunteers turn adapted learning content into clear, expressive audio for visually impaired students across India.</p><div class="hero-actions"><a class="button primary" href="audio.html">Create new audio</a><a class="button ghost" href="settings.html">Configure AI services</a></div></div>
+      <div class="hero-art" aria-label="Saved audio summary"><div class="pulse"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><strong id="recording-count">0</strong><small>saved accessible<br>recordings</small></div>
+    </section>
+    <section class="dashboard">
+      <div class="section-head"><div><span class="eyebrow">Saved work</span><h2>Audio dashboard</h2></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Content title</th><th>Language</th><th>Format</th><th>Audio</th><th>Created by</th></tr></thead><tbody id="audio-dashboard-body"><tr><td colspan="5">Loading saved audio…</td></tr></tbody></table></div>
+    </section>
+    <section class="next-step"><div><span class="eyebrow light">Ready for your next story?</span><h2>Turn a prepared script into accessible audio.</h2></div><a class="button sun" href="audio.html">Open audio studio</a></section>
+  </main>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="shared.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

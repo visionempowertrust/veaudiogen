@@ -9,6 +9,7 @@ const catalog={
 const languageCodes={'Hindi — हिन्दी':'hi-IN','English — India':'en-IN','Tamil — தமிழ்':'ta-IN','Telugu — తెలుగు':'te-IN','Marathi — मराठी':'mr-IN','Bengali — বাংলা':'bn-IN','Kannada — ಕನ್ನಡ':'kn-IN','Malayalam — മലയാളം':'ml-IN','Gujarati — ગુજરાતી':'gu-IN'};
 const select=document.getElementById('service-select'),table=document.getElementById('variation-table');
 document.getElementById('format')?.closest('label')?.remove();
+document.getElementById('download-selected').textContent='Save Audio';
 let configured={},enabled=['sarvam'],generated={},selectedKey=null,trialNumber=0,voiceSelections={};
 select.innerHTML='<option value="sarvam">Sarvam AI · checking production configuration…</option>';
 
@@ -42,8 +43,8 @@ function render(){
 }
 function updateSelection(){
  const button=document.getElementById('download-selected'),title=document.getElementById('selected-title'),copy=document.getElementById('selected-copy');
- if(!selectedKey||!generated[selectedKey]){title.textContent='No rendition selected';copy.textContent='Generate samples, listen, then select one rendition to download.';button.disabled=true;return}
- const sample=generated[selectedKey];title.textContent=`${sample.model} · ${sample.voice} selected`;copy.textContent=sample.savedId?`${sample.provider} · saved securely in Supabase and ready to download`:`${sample.provider} · saving selection…`;button.disabled=false;
+ if(!selectedKey||!generated[selectedKey]){title.textContent='No rendition selected';copy.textContent='Generate samples, listen, then select one final rendition to save.';button.disabled=true;return}
+ const sample=generated[selectedKey];title.textContent=`${sample.model} · ${sample.voice} selected`;copy.textContent=sample.savedId?`${sample.provider} · saved securely in Supabase`:`${sample.provider} · ready to save`;button.disabled=Boolean(sample.savedId);
 }
 function audioUrlFromBase64(base64,mimeType){
  const binary=atob(base64),parts=[];
@@ -57,17 +58,13 @@ function audioUrlFromBase64(base64,mimeType){
 select.addEventListener('change',render);
 table.addEventListener('change',async event=>{
  if(event.target.matches('.voice-select')){voiceSelections[event.target.closest('.variation-row').dataset.key]=event.target.value}
- if(event.target.matches('.select-rendition input')){
-  const key=event.target.closest('.variation-row').dataset.key;
-  selectedKey=event.target.checked?key:null;render();
-  if(selectedKey)await saveSelectedRendition(key);
- }
+ if(event.target.matches('.select-rendition input')){const key=event.target.closest('.variation-row').dataset.key;selectedKey=event.target.checked?key:null;render()}
 });
 async function saveSelectedRendition(key){
  const sample=generated[key],config=window.VAANI_SUPABASE;
  if(!sample||sample.savedId)return;
  try{
-  const response=await fetch(`${config.url}/functions/v1/generate-audio`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`,'Content-Type':'application/json'},body:JSON.stringify({action:'save-selection',author:sample.author,title:sample.title,format:sample.format,language_code:sample.language,model:sample.model.toLowerCase().replace(' ',':'),speaker:sample.voice,narration_text:sample.translatedText||sample.text,audio:sample.audioBase64,mime_type:sample.mimeType||'audio/mpeg',request_id:sample.requestId})});
+  const response=await fetch(`${config.url}/functions/v1/generate-audio`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`,'Content-Type':'application/json'},body:JSON.stringify({action:'save-selection',author:sample.author,title:sample.title,format:sample.format,language_code:sample.language,model:sample.model.toLowerCase().replace(' ',':'),speaker:sample.voice,narration_text:sample.translatedText||sample.text,audio:sample.audioBase64,mime_type:sample.mimeType||'audio/mpeg',request_id:sample.requestId,created_by:'Volunteer'})});
   const result=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(result.error||'Could not save the selected rendition');
   sample.savedId=result.id;render();toast('Selected rendition saved in Supabase');
@@ -97,7 +94,7 @@ table.addEventListener('play',event=>{
  if(!event.target.matches('.sample-player'))return;
  table.querySelectorAll('.sample-player').forEach(player=>{if(player!==event.target)player.pause()});
 },{capture:true});
-document.getElementById('download-selected').addEventListener('click',()=>{const sample=generated[selectedKey];if(!sample?.audioUrl){toast('Generate and select a production rendition first');return}const link=document.createElement('a');link.href=sample.audioUrl;link.download=`${sample.title.replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()}-${sample.voice}.mp3`;document.body.appendChild(link);link.click();link.remove()});
+document.getElementById('download-selected').addEventListener('click',()=>{if(!selectedKey||!generated[selectedKey]){toast('Generate and select a final rendition first');return}saveSelectedRendition(selectedKey)});
 window.addEventListener('pagehide',()=>Object.values(generated).forEach(sample=>URL.revokeObjectURL(sample.audioUrl)));
 async function loadConfiguredServices(){
  const config=window.VAANI_SUPABASE;

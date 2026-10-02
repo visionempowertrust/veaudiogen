@@ -12,8 +12,12 @@ create table if not exists public.selected_audio_renditions (
   audio_base64 text not null,
   mime_type text not null default 'audio/mpeg',
   sarvam_request_id text,
+  created_by text not null default 'Volunteer',
   created_at timestamptz not null default now()
 );
+
+alter table public.selected_audio_renditions
+  add column if not exists created_by text not null default 'Volunteer';
 
 alter table public.selected_audio_renditions enable row level security;
 revoke all on table public.selected_audio_renditions from public, anon, authenticated;

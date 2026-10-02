@@ -27,6 +27,12 @@ Deno.serve(async (request) => {
   if(!serviceKey) return json({error:'Server credential is unavailable'},500,origin);
   const admin=createClient(supabaseUrl,serviceKey,{auth:{persistSession:false}});
 
+  if(input.action==='list-saved') {
+    const {data,error}=await admin.from('selected_audio_renditions').select('id,author,title,content_format,language_code,model,speaker,audio_base64,mime_type,created_by,created_at').order('created_at',{ascending:false}).limit(50);
+    if(error) return json({error:'Saved audio library is not configured'},503,origin);
+    return json({records:data},200,origin);
+  }
+
   if(input.action==='save-selection') {
     const audio=typeof input.audio==='string'?input.audio:'';
     if(!audio||audio.length>8_000_000) return json({error:'Selected audio is missing or too large'},400,origin);
@@ -34,7 +40,7 @@ Deno.serve(async (request) => {
       author:String(input.author||'').slice(0,300),title:String(input.title||'').slice(0,500),content_format:String(input.format||'').slice(0,40),
       language_code:String(input.language_code||'').slice(0,20),model:String(input.model||'').slice(0,40),speaker:String(input.speaker||'').slice(0,80),
       narration_text:String(input.narration_text||'').slice(0,5000),audio_base64:audio,mime_type:String(input.mime_type||'audio/mpeg').slice(0,80),
-      sarvam_request_id:input.request_id?String(input.request_id).slice(0,200):null
+      sarvam_request_id:input.request_id?String(input.request_id).slice(0,200):null,created_by:String(input.created_by||'Volunteer').slice(0,120)
     }).select('id').single();
     if(error) return json({error:'Selected rendition storage is not configured'},503,origin);
     return json({id:data.id},201,origin);
