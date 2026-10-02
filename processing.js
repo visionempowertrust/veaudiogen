@@ -1,7 +1,7 @@
 const mediaFile=document.getElementById('media-file'),processButton=document.getElementById('process-media'),statusText=document.getElementById('processing-status');
 const results=document.getElementById('processing-results'),sourceTranscript=document.getElementById('source-transcript'),englishTranslation=document.getElementById('english-translation');
 const genderResult=document.getElementById('gender-result'),generateEnglish=document.getElementById('generate-english-audio'),audioOutput=document.getElementById('english-audio-output');
-let estimatedGender='male',englishAudioUrl=null;
+let estimatedGender='male',englishAudioUrls=[];
 
 mediaFile.addEventListener('change',()=>{const file=mediaFile.files[0];document.getElementById('file-copy').textContent=file?`${file.name} · ${(file.size/1048576).toFixed(1)} MB`:'Choose an audio or video file'});
 
@@ -19,7 +19,6 @@ async function extractAudio(file){
  const context=new AudioContext();
  try{
   const decoded=await context.decodeAudioData(await file.arrayBuffer());
-  if(decoded.duration>30.5)throw new Error('The video must be 30 seconds or shorter');
   const offline=new OfflineAudioContext(1,Math.ceil(decoded.duration*16000),16000),source=offline.createBufferSource();source.buffer=decoded;source.connect(offline.destination);source.start();
   const rendered=await offline.startRendering(),wav=encodeWav(rendered),name=file.name.replace(/\.[^.]+$/, '')+'-audio.wav';return new File([wav],name,{type:'audio/wav'});
  }catch(error){throw new Error(error.message||'This browser could not extract audio from the video. Use an MP4 with an AAC audio track.')}finally{await context.close()}
@@ -41,13 +40,26 @@ async function estimateSpeakerGender(file){
  }catch{return null}
 }
 
+const wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
+async function waitForBatch(jobId,languageCode){
+ const config=window.VAANI_SUPABASE;
+ for(let attempt=0;attempt<120;attempt++){
+  statusText.textContent=`Sarvam batch processing in progress${'.'.repeat(attempt%4)}`;
+  const response=await fetch(`${config.url}/functions/v1/generate-audio`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`,'Content-Type':'application/json'},body:JSON.stringify({action:'process-media-status',job_id:jobId,language_code:languageCode})}),result=await response.json().catch(()=>({}));
+  if(response.status===202&&result.pending){await wait(5000);continue}
+  if(!response.ok)throw new Error(result.error||'Batch processing failed');return result;
+ }
+ throw new Error('Processing is taking longer than expected. Please try again later.');
+}
+
 processButton.addEventListener('click',async()=>{
  const file=mediaFile.files[0];if(!file){toast('Choose an audio or video file first');return}if(file.size>20000000){toast('The upload must be 20 MB or smaller');return}
  processButton.disabled=true;statusText.textContent='Uploading and processing with Sarvam…';results.hidden=true;audioOutput.innerHTML='';
  try{
-  const audioFile=await extractAudio(file),genderPromise=estimateSpeakerGender(audioFile),form=new FormData();form.append('action','process-media');form.append('language_code',document.getElementById('source-language').value);form.append('file',audioFile,audioFile.name);statusText.textContent='Uploading extracted audio and processing with Sarvam…';
-  const config=window.VAANI_SUPABASE,response=await fetch(`${config.url}/functions/v1/generate-audio`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`},body:form}),result=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(result.error||'Media processing failed');
+  const audioFile=await extractAudio(file);if(audioFile.size>20000000)throw new Error('The extracted audio exceeds 20 MB. Please use a shorter or more compressed recording.');
+  const genderPromise=estimateSpeakerGender(audioFile),languageCode=document.getElementById('source-language').value,form=new FormData();form.append('action','process-media');form.append('language_code',languageCode);form.append('file',audioFile,audioFile.name);statusText.textContent='Uploading extracted audio to Sarvam batch processing…';
+  const config=window.VAANI_SUPABASE,response=await fetch(`${config.url}/functions/v1/generate-audio`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`},body:form}),started=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(started.error||'Media processing failed');const result=started.batch?await waitForBatch(started.jobId,languageCode):started;
   sourceTranscript.value=result.transcript||'';englishTranslation.value=result.englishTranslation||'';estimatedGender=await genderPromise||'male';
   genderResult.textContent=`Estimated original speaker: ${estimatedGender}. English voice: ${estimatedGender==='female'?'Priya':'Ratan'}.`;
   results.hidden=false;statusText.textContent='Transcript and English translation ready';toast('Media processing complete');
@@ -59,11 +71,11 @@ generateEnglish.addEventListener('click',async()=>{
  generateEnglish.disabled=true;generateEnglish.textContent='Generating English audio…';
  try{
   const config=window.VAANI_SUPABASE,response=await fetch(`${config.url}/functions/v1/generate-audio`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`,'Content-Type':'application/json'},body:JSON.stringify({action:'process-english-tts',text,gender:estimatedGender})}),result=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(result.error||'English audio generation failed');if(englishAudioUrl)URL.revokeObjectURL(englishAudioUrl);
-  const binary=atob(result.audio),bytes=new Uint8Array(binary.length);for(let index=0;index<binary.length;index++)bytes[index]=binary.charCodeAt(index);englishAudioUrl=URL.createObjectURL(new Blob([bytes],{type:result.mimeType||'audio/mpeg'}));
-  audioOutput.innerHTML=`<audio controls autoplay src="${englishAudioUrl}"></audio><a class="audio-link" href="${englishAudioUrl}" download="english-translation-${result.speaker}.mp3">Download English MP3</a>`;toast(`English audio generated with ${result.speaker}`);
+  if(!response.ok)throw new Error(result.error||'English audio generation failed');englishAudioUrls.forEach(url=>URL.revokeObjectURL(url));englishAudioUrls=[];
+  for(const encoded of result.audios||[result.audio]){const binary=atob(encoded),bytes=new Uint8Array(binary.length);for(let index=0;index<binary.length;index++)bytes[index]=binary.charCodeAt(index);englishAudioUrls.push(URL.createObjectURL(new Blob([bytes],{type:result.mimeType||'audio/mpeg'})))}
+  audioOutput.innerHTML=englishAudioUrls.map((url,index)=>`<div class="audio-part"><strong>Part ${index+1}</strong><audio controls ${index===0?'autoplay':''} src="${url}"></audio><a class="audio-link" href="${url}" download="english-translation-${result.speaker}-part-${index+1}.mp3">Download MP3</a></div>`).join('');toast(`English audio generated with ${result.speaker}`);
  }catch(error){toast(error.message||'English audio generation failed')}finally{generateEnglish.disabled=false;generateEnglish.textContent='Generate English audio'}
 });
 
 document.querySelectorAll('.copy-result').forEach(button=>button.addEventListener('click',async()=>{await navigator.clipboard.writeText(document.getElementById(button.dataset.copy).value);toast('Copied to clipboard')}));
-window.addEventListener('pagehide',()=>{if(englishAudioUrl)URL.revokeObjectURL(englishAudioUrl)});
+window.addEventListener('pagehide',()=>englishAudioUrls.forEach(url=>URL.revokeObjectURL(url)));

@@ -13,6 +13,11 @@ function cors(origin: string | null) {
 function json(body: unknown, status: number, origin: string | null) {
   return new Response(JSON.stringify(body), {status, headers:{...cors(origin),'Content-Type':'application/json','Cache-Control':'no-store'}});
 }
+function textChunks(text:string,limit=1900){
+  const chunks:string[]=[];let remaining=text.trim();
+  while(remaining.length>limit){let end=remaining.lastIndexOf('. ',limit);if(end<limit*.5)end=remaining.lastIndexOf(' ',limit);if(end<1)end=limit;chunks.push(remaining.slice(0,end+1).trim());remaining=remaining.slice(end+1).trim()}
+  if(remaining)chunks.push(remaining);return chunks;
+}
 
 Deno.serve(async (request) => {
   const origin=request.headers.get('origin');
@@ -38,36 +43,61 @@ Deno.serve(async (request) => {
     if(!quota) return json({error:'Processing limit reached. Please try again later.'},429,origin);
     const {data:apiKey,error:keyError}=await admin.rpc('get_ai_service_key',{p_provider:'sarvam'});
     if(keyError||!apiKey) return json({error:'Sarvam is not configured in Supabase Vault'},503,origin);
-    const requestSpeech=async(mode:'transcribe'|'translate')=>{
-      const sarvamFile=file.type==='video/mp4'?new File([file],file.name.replace(/\.mp4$/i,'.m4a'),{type:'audio/mp4'}):file;
-      const speechForm=new FormData();
-      speechForm.append('file',sarvamFile,sarvamFile.name);speechForm.append('model','saaras:v3');speechForm.append('mode',mode);speechForm.append('language_code',language);
-      const response=await fetch('https://api.sarvam.ai/speech-to-text',{method:'POST',headers:{'api-subscription-key':apiKey},body:speechForm});
-      const result=await response.json().catch(()=>null);
-      if(!response.ok) throw new Error(result?.error?.message||result?.message||`Sarvam ${mode} failed (${response.status})`);
-      return result;
-    };
     try {
-      const [transcription,translation]=await Promise.all([requestSpeech('transcribe'),requestSpeech('translate')]);
-      return json({transcript:transcription.transcript,englishTranslation:translation.transcript,sourceLanguage:transcription.language_code||language,transcriptionRequestId:transcription.request_id||null,translationRequestId:translation.request_id||null},200,origin);
+      const headers={'api-subscription-key':apiKey,'Content-Type':'application/json'};
+      const initiated=await fetch('https://api.sarvam.ai/speech-to-text/job/v1',{method:'POST',headers,body:JSON.stringify({job_parameters:{language_code:language,model:'saaras:v3',mode:'transcribe'}})}),job=await initiated.json().catch(()=>null);
+      if(!initiated.ok||!job?.job_id)throw new Error(job?.error?.message||job?.message||'Could not create the Sarvam batch job');
+      const fileName=file.name.replace(/[^a-zA-Z0-9._-]/g,'-');
+      const linksResponse=await fetch('https://api.sarvam.ai/speech-to-text/job/v1/upload-files',{method:'POST',headers,body:JSON.stringify({job_id:job.job_id,files:[fileName]})}),links=await linksResponse.json().catch(()=>null);
+      const uploadUrl=links?.upload_urls?.[fileName]?.file_url;
+      if(!linksResponse.ok||!uploadUrl)throw new Error(links?.error?.message||links?.message||'Could not prepare the Sarvam upload');
+      const uploaded=await fetch(uploadUrl,{method:'PUT',headers:{'Content-Type':file.type||'application/octet-stream','x-ms-blob-type':'BlockBlob'},body:file});
+      if(!uploaded.ok)throw new Error(`Audio upload failed (${uploaded.status})`);
+      const started=await fetch(`https://api.sarvam.ai/speech-to-text/job/v1/${job.job_id}/start`,{method:'POST',headers:{'api-subscription-key':apiKey}}),startResult=await started.json().catch(()=>null);
+      if(!started.ok)throw new Error(startResult?.error?.message||startResult?.message||'Could not start the Sarvam batch job');
+      return json({batch:true,jobId:job.job_id,state:startResult?.job_state||'Running',sourceLanguage:language},202,origin);
     } catch(error) { return json({error:error instanceof Error?error.message:'Sarvam media processing failed'},502,origin); }
   }
 
   let input: Record<string, unknown>;
   try { input=await request.json(); } catch { return json({error:'Invalid JSON body'},400,origin); }
 
+  if(input.action==='process-media-status') {
+    const jobId=String(input.job_id||''),language=String(input.language_code||'');
+    if(!/^[a-zA-Z0-9_-]{8,200}$/.test(jobId)||!languages.has(language))return json({error:'Invalid processing job'},400,origin);
+    const {data:apiKey,error:keyError}=await admin.rpc('get_ai_service_key',{p_provider:'sarvam'});
+    if(keyError||!apiKey) return json({error:'Sarvam is not configured in Supabase Vault'},503,origin);
+    const headers={'api-subscription-key':apiKey,'Content-Type':'application/json'};
+    const statusResponse=await fetch(`https://api.sarvam.ai/speech-to-text/job/v1/${jobId}/status`,{headers:{'api-subscription-key':apiKey}}),status=await statusResponse.json().catch(()=>null);
+    if(!statusResponse.ok)return json({error:status?.error?.message||status?.message||'Could not read batch status'},502,origin);
+    if(status.job_state==='Failed')return json({error:status.error_message||'Sarvam batch processing failed'},502,origin);
+    if(status.job_state!=='Completed')return json({pending:true,state:status.job_state||'Running'},202,origin);
+    const outputName=status.job_details?.[0]?.outputs?.[0]?.file_name;
+    if(!outputName)return json({error:'Sarvam completed without a transcript file'},502,origin);
+    const downloadResponse=await fetch('https://api.sarvam.ai/speech-to-text/job/v1/download-files',{method:'POST',headers,body:JSON.stringify({job_id:jobId,files:[outputName]})}),downloads=await downloadResponse.json().catch(()=>null),downloadUrl=downloads?.download_urls?.[outputName]?.file_url;
+    if(!downloadResponse.ok||!downloadUrl)return json({error:downloads?.error?.message||downloads?.message||'Could not retrieve the transcript'},502,origin);
+    const transcriptResponse=await fetch(downloadUrl),transcriptResult=await transcriptResponse.json().catch(()=>null),transcript=transcriptResult?.transcript||transcriptResult?.data?.transcript;
+    if(!transcript)return json({error:'The completed batch result contained no transcript'},502,origin);
+    let englishTranslation=transcript;
+    if(language!=='en-IN'){
+      const translated:string[]=[];
+      for(const chunk of textChunks(transcript)){const response=await fetch('https://api.sarvam.ai/translate',{method:'POST',headers,body:JSON.stringify({input:chunk,source_language_code:language,target_language_code:'en-IN',model:'sarvam-translate:v1'})}),result=await response.json().catch(()=>null);if(!response.ok||!result?.translated_text)return json({error:result?.error?.message||result?.message||'English translation failed'},502,origin);translated.push(result.translated_text)}
+      englishTranslation=translated.join(' ');
+    }
+    return json({pending:false,state:'Completed',transcript,englishTranslation,sourceLanguage:language},200,origin);
+  }
+
   if(input.action==='process-english-tts') {
     const text=String(input.text||'').trim(),gender=input.gender==='female'?'female':'male',speaker=input.gender==='female'?'priya':'ratan';
-    if(!text||text.length>2500) return json({error:'English translation must contain 1 to 2,500 characters'},400,origin);
+    if(!text||text.length>20_000) return json({error:'English translation must contain 1 to 20,000 characters'},400,origin);
     const {data:quota,error:quotaError}=await admin.rpc('consume_audio_generation_quota');
     if(quotaError) return json({error:'Usage protection is not configured'},503,origin);
     if(!quota) return json({error:'Audio generation limit reached. Please try again later.'},429,origin);
     const {data:apiKey,error:keyError}=await admin.rpc('get_ai_service_key',{p_provider:'sarvam'});
     if(keyError||!apiKey) return json({error:'Sarvam is not configured in Supabase Vault'},503,origin);
-    const response=await fetch('https://api.sarvam.ai/text-to-speech',{method:'POST',headers:{'api-subscription-key':apiKey,'Content-Type':'application/json'},body:JSON.stringify({text,language_code:'en-IN',speaker,model:'bulbul:v3',pace:.92,temperature:.6,speech_sample_rate:24000,output_audio_codec:'mp3'})});
-    const result=await response.json().catch(()=>null),audio=result?.audios?.[0];
-    if(!response.ok||!audio) return json({error:result?.error?.message||result?.message||'Sarvam returned no English audio'},response.status===429?429:502,origin);
-    return json({audio,mimeType:'audio/mpeg',speaker,gender,requestId:result.request_id||null},200,origin);
+    const audios:string[]=[],requestIds:string[]=[];
+    for(const chunk of textChunks(text,2400)){const response=await fetch('https://api.sarvam.ai/text-to-speech',{method:'POST',headers:{'api-subscription-key':apiKey,'Content-Type':'application/json'},body:JSON.stringify({text:chunk,language_code:'en-IN',speaker,model:'bulbul:v3',pace:.92,temperature:.6,speech_sample_rate:24000,output_audio_codec:'mp3'})}),result=await response.json().catch(()=>null),audio=result?.audios?.[0];if(!response.ok||!audio)return json({error:result?.error?.message||result?.message||'Sarvam returned no English audio'},response.status===429?429:502,origin);audios.push(audio);if(result.request_id)requestIds.push(result.request_id)}
+    return json({audio:audios[0],audios,mimeType:'audio/mpeg',speaker,gender,requestIds},200,origin);
   }
 
   if(input.action==='list-saved') {
