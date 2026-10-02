@@ -1,0 +1,4 @@
+browser-voice-preview.ogg is adapted without modification from “Pangram3.ogg”
+by Aren Elliott, licensed CC BY-SA 4.0.
+Source: https://commons.wikimedia.org/wiki/File:Pangram3.ogg
+License: https://creativecommons.org/licenses/by-sa/4.0/
