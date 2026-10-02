@@ -5,6 +5,26 @@ let estimatedGender='male',englishAudioUrl=null;
 
 mediaFile.addEventListener('change',()=>{const file=mediaFile.files[0];document.getElementById('file-copy').textContent=file?`${file.name} · ${(file.size/1048576).toFixed(1)} MB`:'Choose an audio or video file'});
 
+function encodeWav(buffer){
+ const samples=buffer.getChannelData(0),output=new ArrayBuffer(44+samples.length*2),view=new DataView(output);let offset=0;
+ const writeText=text=>{for(let index=0;index<text.length;index++)view.setUint8(offset++,text.charCodeAt(index))};
+ writeText('RIFF');view.setUint32(offset,36+samples.length*2,true);offset+=4;writeText('WAVE');writeText('fmt ');view.setUint32(offset,16,true);offset+=4;view.setUint16(offset,1,true);offset+=2;view.setUint16(offset,1,true);offset+=2;view.setUint32(offset,16000,true);offset+=4;view.setUint32(offset,32000,true);offset+=4;view.setUint16(offset,2,true);offset+=2;view.setUint16(offset,16,true);offset+=2;writeText('data');view.setUint32(offset,samples.length*2,true);offset+=4;
+ for(const sample of samples){const value=Math.max(-1,Math.min(1,sample));view.setInt16(offset,value<0?value*32768:value*32767,true);offset+=2}
+ return output;
+}
+
+async function extractAudio(file){
+ const isVideo=file.type.startsWith('video/')||/\.(mp4|webm|mov|mkv)$/i.test(file.name);if(!isVideo)return file;
+ statusText.textContent='Extracting the audio track from the video…';
+ const context=new AudioContext();
+ try{
+  const decoded=await context.decodeAudioData(await file.arrayBuffer());
+  if(decoded.duration>30.5)throw new Error('The video must be 30 seconds or shorter');
+  const offline=new OfflineAudioContext(1,Math.ceil(decoded.duration*16000),16000),source=offline.createBufferSource();source.buffer=decoded;source.connect(offline.destination);source.start();
+  const rendered=await offline.startRendering(),wav=encodeWav(rendered),name=file.name.replace(/\.[^.]+$/, '')+'-audio.wav';return new File([wav],name,{type:'audio/wav'});
+ }catch(error){throw new Error(error.message||'This browser could not extract audio from the video. Use an MP4 with an AAC audio track.')}finally{await context.close()}
+}
+
 async function estimateSpeakerGender(file){
  try{
   const context=new AudioContext(),buffer=await context.decodeAudioData(await file.arrayBuffer()),channel=buffer.getChannelData(0),rate=buffer.sampleRate;
@@ -24,8 +44,8 @@ async function estimateSpeakerGender(file){
 processButton.addEventListener('click',async()=>{
  const file=mediaFile.files[0];if(!file){toast('Choose an audio or video file first');return}if(file.size>20000000){toast('The upload must be 20 MB or smaller');return}
  processButton.disabled=true;statusText.textContent='Uploading and processing with Sarvam…';results.hidden=true;audioOutput.innerHTML='';
- const genderPromise=estimateSpeakerGender(file),form=new FormData();form.append('action','process-media');form.append('language_code',document.getElementById('source-language').value);form.append('file',file,file.name);
  try{
+  const audioFile=await extractAudio(file),genderPromise=estimateSpeakerGender(audioFile),form=new FormData();form.append('action','process-media');form.append('language_code',document.getElementById('source-language').value);form.append('file',audioFile,audioFile.name);statusText.textContent='Uploading extracted audio and processing with Sarvam…';
   const config=window.VAANI_SUPABASE,response=await fetch(`${config.url}/functions/v1/generate-audio`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`},body:form}),result=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(result.error||'Media processing failed');
   sourceTranscript.value=result.transcript||'';englishTranslation.value=result.englishTranslation||'';estimatedGender=await genderPromise||'male';
