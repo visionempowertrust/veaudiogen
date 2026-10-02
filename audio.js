@@ -71,10 +71,9 @@ table.addEventListener('change',event=>{
 async function generateSample(row,button){
  const provider=catalog[select.value],index=Number(row.dataset.key.split('-').pop()),voice=row.querySelector('.voice-select').value,narration=buildNarration();
  if(!narration){toast('Add the author, title, and script before generating');return}
- if(!configured[select.value]){toast(`${provider.name} is not configured in Supabase Vault`);return}
+ if(!configured.sarvam){toast('Sarvam is not configured in Supabase Vault');return}
  button.disabled=true;button.textContent='Generating production audio…';
  try{
-  if(select.value!=='sarvam')throw new Error(`${provider.name} production generation is not connected yet`);
   const config=window.VAANI_SUPABASE;
   const response=await fetch(`${config.url}/functions/v1/generate-audio`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`,'Content-Type':'application/json'},body:JSON.stringify({text:narration.text,language_code:narration.language,speaker:voice,pace:.92,temperature:.6})});
   const result=await response.json().catch(()=>({}));
@@ -92,5 +91,5 @@ document.getElementById('download-selected').addEventListener('click',()=>{const
 window.addEventListener('pagehide',stopSpeech);
 async function loadConfiguredServices(){
  const config=window.VAANI_SUPABASE;
- try{const response=await fetch(`${config.url}/rest/v1/rpc/list_configured_ai_services`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`,'Content-Type':'application/json'},body:'{}'});if(!response.ok)throw new Error();const rows=await response.json();configured=Object.fromEntries(rows.map(row=>[row.provider,true]));enabled=Object.keys(configured).filter(key=>catalog[key]);if(!enabled.length)enabled=['sarvam'];select.innerHTML=enabled.map(id=>`<option value="${id}">${catalog[id].name}${configured[id]?' · production':' · unavailable'}</option>`).join('')}catch{configured={};select.innerHTML='<option value="sarvam">Sarvam AI · Supabase setup pending</option>'}render()}
+ try{const response=await fetch(`${config.url}/rest/v1/rpc/list_configured_ai_services`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`,'Content-Type':'application/json'},body:'{}'});if(!response.ok)throw new Error();const rows=await response.json();configured=Object.fromEntries(rows.map(row=>[row.provider,true]));enabled=['sarvam'];select.innerHTML=`<option value="sarvam">Sarvam AI · ${configured.sarvam?'production':'setup pending'}</option>`}catch{configured={};select.innerHTML='<option value="sarvam">Sarvam AI · Supabase setup pending</option>'}render()}
 loadConfiguredServices();
