@@ -1,0 +1,21 @@
+.sample {
+  grid-template-columns: minmax(240px, 1fr) auto auto;
+  gap: 12px;
+}
+
+.sample-player {
+  display: block;
+  width: 100%;
+  min-width: 240px;
+  height: 40px;
+}
+
+@media (max-width: 680px) {
+  .sample {
+    grid-template-columns: 1fr;
+  }
+
+  .sample .select-rendition {
+    grid-column: 1;
+  }
+}
