@@ -6,7 +6,10 @@ const allowedOrigins = new Set([
   'http://localhost:4173'
 ]);
 const languages = new Set(['hi-IN','en-IN','ta-IN','te-IN','mr-IN','bn-IN','kn-IN','ml-IN','gu-IN']);
-const speakers = new Set(['shubh','aditya','ritu','priya','neha','rahul','pooja','rohan','simran','kavya','amit','dev','ishita','shreya','ratan','varun','manan','sumit','roopa','kabir','aayan','ashutosh','advait','anand','tanya','tarun','sunny','mani','gokul','vijay','shruti','suhani','mohit','kavitha','rehan','soham','rupali']);
+const speakersByModel = {
+  'bulbul:v3': new Set(['shubh','aditya','ritu','priya','neha','rahul','pooja','rohan','simran','kavya','amit','dev','ishita','shreya','ratan','varun','manan','sumit','roopa','kabir','aayan','ashutosh','advait','anand','tanya','tarun','sunny','mani','gokul','vijay','shruti','suhani','mohit','kavitha','rehan','soham','rupali']),
+  'bulbul:v2': new Set(['anushka','manisha','vidya','arya','abhilash','karun','hitesh'])
+};
 
 function cors(origin: string | null) {
   const allowed = origin && allowedOrigins.has(origin) ? origin : 'https://visionempowertrust.github.io';
@@ -22,12 +25,14 @@ Deno.serve(async (request) => {
   if(request.method!=='POST') return json({error:'Method not allowed'},405,origin);
   if(origin && !allowedOrigins.has(origin)) return json({error:'Origin not allowed'},403,origin);
 
-  let input: {text?:string;language_code?:string;speaker?:string;pace?:number;temperature?:number};
+  let input: {text?:string;language_code?:string;speaker?:string;model?:string;pace?:number;temperature?:number};
   try { input=await request.json(); } catch { return json({error:'Invalid JSON body'},400,origin); }
-  const text=(input.text||'').trim(), language=input.language_code||'', speaker=input.speaker||'shubh';
-  if(!text||text.length>2500) return json({error:'Text must contain 1 to 2,500 characters'},400,origin);
+  const text=(input.text||'').trim(), language=input.language_code||'', model=input.model||'bulbul:v3', speaker=input.speaker||(model==='bulbul:v2'?'anushka':'shubh');
+  if(!(model in speakersByModel)) return json({error:'Unsupported Sarvam model'},400,origin);
+  const textLimit=model==='bulbul:v2'?1500:2500;
+  if(!text||text.length>textLimit) return json({error:`Text must contain 1 to ${textLimit.toLocaleString()} characters for ${model}`},400,origin);
   if(!languages.has(language)) return json({error:'Unsupported language'},400,origin);
-  if(!speakers.has(speaker)) return json({error:'Unsupported Sarvam voice'},400,origin);
+  if(!speakersByModel[model as keyof typeof speakersByModel].has(speaker)) return json({error:`Unsupported voice for ${model}`},400,origin);
 
   const supabaseUrl=Deno.env.get('SUPABASE_URL')!;
   const serviceKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -42,11 +47,11 @@ Deno.serve(async (request) => {
   const sarvam=await fetch('https://api.sarvam.ai/text-to-speech',{
     method:'POST',
     headers:{'api-subscription-key':apiKey,'Content-Type':'application/json'},
-    body:JSON.stringify({text,language_code:language,speaker,model:'bulbul:v3',pace:Math.min(2,Math.max(.5,input.pace||.92)),temperature:Math.min(2,Math.max(.01,input.temperature||.6)),speech_sample_rate:24000,output_audio_codec:'mp3'})
+    body:JSON.stringify({text,language_code:language,speaker,model,pace:model==='bulbul:v2'?Math.min(3,Math.max(.3,input.pace||.92)):Math.min(2,Math.max(.5,input.pace||.92)),...(model==='bulbul:v3'?{temperature:Math.min(2,Math.max(.01,input.temperature||.6))}:{}),speech_sample_rate:24000,output_audio_codec:'mp3'})
   });
   const result=await sarvam.json().catch(()=>null);
   if(!sarvam.ok) return json({error:result?.error?.message||result?.message||`Sarvam request failed (${sarvam.status})`},sarvam.status===429?429:502,origin);
   const audio=result?.audios?.[0];
   if(!audio) return json({error:'Sarvam returned no audio'},502,origin);
-  return json({audio,mimeType:'audio/mpeg',requestId:result.request_id||null,model:'bulbul:v3',speaker,language},200,origin);
+  return json({audio,mimeType:'audio/mpeg',requestId:result.request_id||null,model,speaker,language},200,origin);
 });

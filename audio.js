@@ -1,5 +1,5 @@
 const catalog={
- sarvam:{name:'Sarvam AI',logo:'स',models:[['Bulbul v3',['shubh','aditya','ritu','priya','neha','rahul','pooja','rohan','simran','kavya','amit','dev','ishita','shreya','ratan','varun','manan','sumit','roopa','kabir','aayan','ashutosh','advait','anand','tanya','tarun','sunny','mani','gokul','vijay','shruti','suhani','mohit','kavitha','rehan','soham','rupali']]]},
+ sarvam:{name:'Sarvam AI',logo:'स',models:[['Bulbul v3',['shubh','aditya','ritu','priya','neha','rahul','pooja','rohan','simran','kavya','amit','dev','ishita','shreya','ratan','varun','manan','sumit','roopa','kabir','aayan','ashutosh','advait','anand','tanya','tarun','sunny','mani','gokul','vijay','shruti','suhani','mohit','kavitha','rehan','soham','rupali']],['Bulbul v2',['anushka','manisha','vidya','arya','abhilash','karun','hitesh']]]},
  azure:{name:'Azure AI Speech',logo:'Az',models:[['Neural HD',['Swara · hi-IN','Madhur · hi-IN','Neerja · en-IN','Prabhat · en-IN']],['Multilingual Neural',['Aarohi','Arjun','Kavya','Rehaan']]]},
  google:{name:'Google Cloud TTS',logo:'G',models:[['Chirp 3 HD',['Leda','Orus','Aoede','Charon']],['Neural2',['hi-IN-A','hi-IN-B','en-IN-C','en-IN-D']]]},
  aws:{name:'Amazon Polly',logo:'A',models:[['Neural',['Aditi','Kajal','Raveena','Rishi']],['Long-form',['Aditi','Kajal']]]},
@@ -75,7 +75,8 @@ async function generateSample(row,button){
  button.disabled=true;button.textContent='Generating production audio…';
  try{
   const config=window.VAANI_SUPABASE;
-  const response=await fetch(`${config.url}/functions/v1/generate-audio`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`,'Content-Type':'application/json'},body:JSON.stringify({text:narration.text,language_code:narration.language,speaker:voice,pace:.92,temperature:.6})});
+  const model=provider.models[index][0].toLowerCase().replace(' ',':');
+  const response=await fetch(`${config.url}/functions/v1/generate-audio`,{method:'POST',headers:{apikey:config.publishableKey,Authorization:`Bearer ${config.publishableKey}`,'Content-Type':'application/json'},body:JSON.stringify({text:narration.text,language_code:narration.language,speaker:voice,model,pace:.92,temperature:.6})});
   const result=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(result.error||'Sarvam audio generation failed');
   generated[row.dataset.key]={provider:provider.name,model:provider.models[index][0],voice,duration:'production MP3',audioUrl:`data:${result.mimeType||'audio/mpeg'};base64,${result.audio}`,requestId:result.requestId,...narration};
