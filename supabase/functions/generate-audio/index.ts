@@ -20,12 +20,54 @@ Deno.serve(async (request) => {
   if(request.method!=='POST') return json({error:'Method not allowed'},405,origin);
   if(origin && !allowedOrigins.has(origin)) return json({error:'Origin not allowed'},403,origin);
 
-  let input: Record<string, unknown>;
-  try { input=await request.json(); } catch { return json({error:'Invalid JSON body'},400,origin); }
   const supabaseUrl=Deno.env.get('SUPABASE_URL')!;
   const serviceKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if(!serviceKey) return json({error:'Server credential is unavailable'},500,origin);
   const admin=createClient(supabaseUrl,serviceKey,{auth:{persistSession:false}});
+
+  if(request.headers.get('content-type')?.includes('multipart/form-data')) {
+    let form: FormData;
+    try { form=await request.formData(); } catch { return json({error:'Invalid upload form'},400,origin); }
+    if(form.get('action')!=='process-media') return json({error:'Unsupported upload action'},400,origin);
+    const file=form.get('file'),language=String(form.get('language_code')||'');
+    if(!(file instanceof File)||!file.size) return json({error:'Choose an audio or video file'},400,origin);
+    if(file.size>20_000_000) return json({error:'The upload must be 20 MB or smaller'},413,origin);
+    if(!languages.has(language)) return json({error:'Unsupported source language'},400,origin);
+    const {data:quota,error:quotaError}=await admin.rpc('consume_audio_generation_quota');
+    if(quotaError) return json({error:'Usage protection is not configured'},503,origin);
+    if(!quota) return json({error:'Processing limit reached. Please try again later.'},429,origin);
+    const {data:apiKey,error:keyError}=await admin.rpc('get_ai_service_key',{p_provider:'sarvam'});
+    if(keyError||!apiKey) return json({error:'Sarvam is not configured in Supabase Vault'},503,origin);
+    const requestSpeech=async(mode:'transcribe'|'translate')=>{
+      const speechForm=new FormData();
+      speechForm.append('file',file,file.name);speechForm.append('model','saaras:v3');speechForm.append('mode',mode);speechForm.append('language_code',language);
+      const response=await fetch('https://api.sarvam.ai/speech-to-text',{method:'POST',headers:{'api-subscription-key':apiKey},body:speechForm});
+      const result=await response.json().catch(()=>null);
+      if(!response.ok) throw new Error(result?.error?.message||result?.message||`Sarvam ${mode} failed (${response.status})`);
+      return result;
+    };
+    try {
+      const [transcription,translation]=await Promise.all([requestSpeech('transcribe'),requestSpeech('translate')]);
+      return json({transcript:transcription.transcript,englishTranslation:translation.transcript,sourceLanguage:transcription.language_code||language,transcriptionRequestId:transcription.request_id||null,translationRequestId:translation.request_id||null},200,origin);
+    } catch(error) { return json({error:error instanceof Error?error.message:'Sarvam media processing failed'},502,origin); }
+  }
+
+  let input: Record<string, unknown>;
+  try { input=await request.json(); } catch { return json({error:'Invalid JSON body'},400,origin); }
+
+  if(input.action==='process-english-tts') {
+    const text=String(input.text||'').trim(),gender=input.gender==='female'?'female':'male',speaker=input.gender==='female'?'priya':'ratan';
+    if(!text||text.length>2500) return json({error:'English translation must contain 1 to 2,500 characters'},400,origin);
+    const {data:quota,error:quotaError}=await admin.rpc('consume_audio_generation_quota');
+    if(quotaError) return json({error:'Usage protection is not configured'},503,origin);
+    if(!quota) return json({error:'Audio generation limit reached. Please try again later.'},429,origin);
+    const {data:apiKey,error:keyError}=await admin.rpc('get_ai_service_key',{p_provider:'sarvam'});
+    if(keyError||!apiKey) return json({error:'Sarvam is not configured in Supabase Vault'},503,origin);
+    const response=await fetch('https://api.sarvam.ai/text-to-speech',{method:'POST',headers:{'api-subscription-key':apiKey,'Content-Type':'application/json'},body:JSON.stringify({text,language_code:'en-IN',speaker,model:'bulbul:v3',pace:.92,temperature:.6,speech_sample_rate:24000,output_audio_codec:'mp3'})});
+    const result=await response.json().catch(()=>null),audio=result?.audios?.[0];
+    if(!response.ok||!audio) return json({error:result?.error?.message||result?.message||'Sarvam returned no English audio'},response.status===429?429:502,origin);
+    return json({audio,mimeType:'audio/mpeg',speaker,gender,requestId:result.request_id||null},200,origin);
+  }
 
   if(input.action==='list-saved') {
     const {data,error}=await admin.from('selected_audio_renditions').select('id,author,title,content_format,language_code,model,speaker,audio_base64,mime_type,created_by,created_at').order('created_at',{ascending:false}).limit(50);

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Audio Processing — VE-Vani Studio</title>
+  <meta name="description" content="Transcribe and translate Indian-language audio and video with Sarvam AI.">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="brand.css">
+  <link rel="stylesheet" href="processing.css">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="index.html"><span class="brandmark"><img src="ve-logo.png" alt=""></span>VE-Vani Studio</a><nav aria-label="Main navigation"><a href="index.html">Dashboard</a><a href="audio.html">Generate audio</a><a class="active" href="processing.html">Audio Processing</a><a href="settings.html">Settings</a></nav><span class="volunteer">Volunteer workspace <b>MS</b></span></header>
+  <main class="shell narrow">
+    <div class="page-intro"><a class="back" href="index.html">← Dashboard</a><span class="eyebrow">Sarvam media tools</span><h1>Audio Processing</h1><p>Upload a short audio or video recording to create a source-language transcript, an English translation, and optional English speech.</p></div>
+    <section class="processing-card">
+      <div class="upload-grid">
+        <label class="upload-box" for="media-file"><strong>Choose audio or video</strong><span id="file-copy">MP3, WAV, AAC, MP4, M4A, WebM and other Sarvam-supported formats · maximum 20 MB · under 30 seconds</span><input id="media-file" type="file" accept="audio/*,video/mp4,video/webm,.m4a,.wma,.amr,.aiff,.flac,.ogg,.opus" required></label>
+        <label>Source language<select id="source-language"><option value="hi-IN">Hindi — हिन्दी</option><option value="en-IN">English — India</option><option value="ta-IN">Tamil — தமிழ்</option><option value="te-IN">Telugu — తెలుగు</option><option value="mr-IN">Marathi — मराठी</option><option value="bn-IN">Bengali — বাংলা</option><option value="kn-IN">Kannada — ಕನ್ನಡ</option><option value="ml-IN">Malayalam — മലയാളം</option><option value="gu-IN">Gujarati — ગુજરાતી</option></select></label>
+      </div>
+      <div class="processing-actions"><button class="button primary" id="process-media">Process file</button><span id="processing-status" role="status">Ready for upload</span></div>
+    </section>
+    <section class="result-grid" id="processing-results" hidden>
+      <article class="result-card"><span class="eyebrow">Source language</span><h2>Transcript</h2><textarea id="source-transcript" readonly></textarea><button class="copy-result" data-copy="source-transcript">Copy transcript</button></article>
+      <article class="result-card"><span class="eyebrow">English</span><h2>Translation</h2><textarea id="english-translation" readonly></textarea><button class="copy-result" data-copy="english-translation">Copy translation</button></article>
+      <article class="result-card speech-card"><div><span class="eyebrow">English rendition</span><h2>Text to speech</h2><p id="gender-result">Speaker gender will be estimated from the original recording.</p></div><button class="button sun" id="generate-english-audio">Generate English audio</button><div id="english-audio-output"></div></article>
+    </section>
+    <p class="processing-note">Speaker gender is estimated locally from vocal pitch and can be imperfect for music, noisy recordings, children, or multiple speakers. Sarvam's standard speech-to-text response does not include gender metadata.</p>
+  </main>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="shared.js"></script><script src="supabase-config.js"></script><script src="processing.js"></script>
+</body>
+</html>
